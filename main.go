@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -18,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type ImportRegexp struct {
@@ -26,9 +28,19 @@ type ImportRegexp struct {
 }
 
 var (
-	impLine = regexp.MustCompile(`^\s+(?:[\w\.]+\s+)?"(.+)"`)
-
-	files = make(chan string)
+	wg           sync.WaitGroup
+	impLine      = regexp.MustCompile(`^\s+(?:[\w\.]+\s+)?"(.+)"`)
+	vendor       = regexp.MustCompile(`vendor/`)
+	importRegexp []ImportRegexp
+	files        = make(chan string, 10)
+	importOrder  = []string{
+		"standard",
+		"other",
+		"kubernetes",
+		"openshift",
+		"module",
+	}
+	beginPath = os.Args[1]
 )
 
 type ByPathValue []ast.ImportSpec
@@ -75,97 +87,93 @@ func addImportSpaces(r io.Reader, breaks []string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-func formatImports(path string) {
-	importGroups := map[string][]ast.ImportSpec{
-		"standard":   []ast.ImportSpec{},
-		"other":      []ast.ImportSpec{},
-		"kubernetes": []ast.ImportSpec{},
-		"openshift":  []ast.ImportSpec{},
-		"module":     []ast.ImportSpec{},
-	}
-	importOrder := []string{
-		"standard",
-		"other",
-		"kubernetes",
-		"openshift",
-		"module",
-	}
-	importRegexp := []ImportRegexp{
-		{Bucket: "module", Regexp: regexp.MustCompile("github.com/openshift/cluster-image-registry-operator")},
-		{Bucket: "kubernetes", Regexp: regexp.MustCompile("k8s.io")},
-		{Bucket: "openshift", Regexp: regexp.MustCompile("github.com/openshift")},
-		{Bucket: "other", Regexp: regexp.MustCompile("[a-zA-Z0-9]+\\.[a-zA-Z0-9]+/")},
-	}
-	var breaks []string
-	fs := token.NewFileSet()
-	contents, err := ioutil.ReadFile(path)
-	if err != nil {
-		fmt.Printf("%#v", err)
-	}
-	f, err := parser.ParseFile(fs, "", contents, parser.ParseComments)
-	if err != nil {
-		log.Fatal(err)
-	}
+func formatImports(files chan string) {
+	defer wg.Done()
+	for path := range files {
+		if len(path) == 0 {
+			continue
+		}
+		fmt.Println(fmt.Sprintf("Processing %s", path))
+		importGroups := map[string][]ast.ImportSpec{
+			"standard":   []ast.ImportSpec{},
+			"other":      []ast.ImportSpec{},
+			"kubernetes": []ast.ImportSpec{},
+			"openshift":  []ast.ImportSpec{},
+			"module":     []ast.ImportSpec{},
+		}
+		var breaks []string
+		fs := token.NewFileSet()
+		contents, err := ioutil.ReadFile(path)
+		if err != nil {
+			fmt.Printf("%#v", err)
+		}
+		f, err := parser.ParseFile(fs, "", contents, parser.ParseComments)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	for _, i := range f.Imports {
-		found := false
-		for _, r := range importRegexp {
-
-			if r.Regexp.MatchString(i.Path.Value) {
-				importGroups[r.Bucket] = append(importGroups[r.Bucket], *i)
-				found = true
-				break
+		for _, i := range f.Imports {
+			if len(i.Path.Value) == 0 {
+				continue
 			}
-		}
-		if !found {
-			importGroups["standard"] = append(importGroups["standard"], *i)
-		}
-	}
+			found := false
+			for _, r := range importRegexp {
 
-	for _, decl := range f.Decls {
-		gen, ok := decl.(*ast.GenDecl)
-		if ok && gen.Tok == token.IMPORT {
-			gen.Specs = []ast.Spec{}
-			newPos := gen.Lparen
-			for _, group := range importOrder {
-				sort.Sort(ByPathValue(importGroups[group]))
-				for n := range importGroups[group] {
-					newPos = token.Pos(int(newPos) + n)
-					importGroups[group][n].Path.ValuePos = newPos
-					importGroups[group][n].EndPos = newPos
-					if importGroups[group][n].Name != nil {
-						importGroups[group][n].Name.NamePos = newPos
-					}
-
-					gen.Specs = append(gen.Specs, &importGroups[group][n])
-					if n == 0 {
-						newstr, err := strconv.Unquote(importGroups[group][n].Path.Value)
-						if err != nil {
-							fmt.Println(err)
-						}
-						breaks = append(breaks, newstr)
-					}
+				if r.Regexp.MatchString(i.Path.Value) {
+					importGroups[r.Bucket] = append(importGroups[r.Bucket], *i)
+					found = true
+					break
 				}
-
+			}
+			if !found {
+				importGroups["standard"] = append(importGroups["standard"], *i)
 			}
 		}
 
-	}
+		for _, decl := range f.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if ok && gen.Tok == token.IMPORT {
+				gen.Specs = []ast.Spec{}
+				for _, group := range importOrder {
+					sort.Sort(ByPathValue(importGroups[group]))
+					for n := range importGroups[group] {
+						importGroups[group][n].EndPos = 0
+						importGroups[group][n].Path.ValuePos = 0
+						if importGroups[group][n].Name != nil {
+							importGroups[group][n].Name.NamePos = 0
+						}
+						gen.Specs = append(gen.Specs, &importGroups[group][n])
+						if n == 0 && group != importOrder[0] {
+							newstr, err := strconv.Unquote(importGroups[group][n].Path.Value)
+							if err != nil {
+								fmt.Println(err)
+							}
+							breaks = append(breaks, newstr)
+						}
+					}
 
-	printerMode := printer.TabIndent
+				}
+			}
 
-	printConfig := &printer.Config{Mode: printerMode, Tabwidth: 4}
+		}
 
-	var buf bytes.Buffer
-	err = printConfig.Fprint(&buf, fs, f)
-	if err != nil {
-		fmt.Printf("%#v", err)
-	}
-	out, err := addImportSpaces(bytes.NewReader(buf.Bytes()), breaks)
-	out, err = format.Source(out)
-	err = ioutil.WriteFile(path, out, 0644)
-	if err != nil {
-		fmt.Println(fmt.Sprintf("%#v", err))
+		printerMode := printer.TabIndent
+
+		printConfig := &printer.Config{Mode: printerMode, Tabwidth: 4}
+
+		var buf bytes.Buffer
+		err = printConfig.Fprint(&buf, fs, f)
+		if err != nil {
+			fmt.Printf("%#v", err)
+		}
+		out, err := addImportSpaces(bytes.NewReader(buf.Bytes()), breaks)
+		out, err = format.Source(out)
+		info, err := os.Stat(path)
+		err = ioutil.WriteFile(path, out, info.Mode())
+		if err != nil {
+			fmt.Println(fmt.Sprintf("%#v", err))
+		}
+
 	}
 }
 
@@ -176,13 +184,33 @@ func isGoFile(f os.FileInfo) bool {
 }
 
 func main() {
+	modulePtr := flag.String("module", "blah", "package name")
+	flag.Parse()
+
+	importRegexp = []ImportRegexp{
+		{Bucket: "module", Regexp: regexp.MustCompile(*modulePtr)},
+		{Bucket: "kubernetes", Regexp: regexp.MustCompile("k8s.io")},
+		{Bucket: "openshift", Regexp: regexp.MustCompile("github.com/openshift")},
+		{Bucket: "other", Regexp: regexp.MustCompile("[a-zA-Z0-9]+\\.[a-zA-Z0-9]+/")},
+	}
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go formatImports(files)
+	}
+	wg.Add(1)
 	go func() {
-		err := filepath.Walk("/home/cdaley/go/src/github.com/openshift/cluster-image-registry-operator/pkg",
-			func(path string, info os.FileInfo, err error) error {
+		defer wg.Done()
+		err := filepath.Walk(".",
+			func(path string, f os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
-				if isGoFile(info) {
+				if f.IsDir() && f.Name() == "vendor" {
+					return filepath.SkipDir
+				}
+				if isGoFile(f) && !vendor.MatchString(path) {
+					fmt.Println(fmt.Sprintf("Queueing %s", path))
 					files <- path
 				}
 				return nil
@@ -190,11 +218,8 @@ func main() {
 		if err != nil {
 			log.Println(err)
 		}
+		close(files)
 	}()
 
-	for file := range files {
-		fmt.Println(fmt.Sprintf("Processing %s", file))
-		formatImports(file)
-	}
-	close(files)
+	wg.Wait()
 }
