@@ -30,8 +30,8 @@ import (
 
 	klog "k8s.io/klog/v2"
 
-	"github.com/coreydaley-redhat/osgoimports/pkg/imports"
-	"github.com/coreydaley-redhat/osgoimports/pkg/util"
+	"github.com/coreydaley/openshift-goimports/pkg/imports"
+	"github.com/coreydaley/openshift-goimports/pkg/util"
 )
 
 var (
@@ -46,7 +46,7 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "osgoimports",
+	Use:   "openshift-goimports",
 	Short: "Organize go imports according to OpenShift best practices.",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -94,10 +94,10 @@ func init() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	cobra.OnInitialize()
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.osgoimports.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.openshift-goimports.yaml)")
 
 	rootCmd.Flags().StringVarP(&path, "path", "p", ".", "The path to the go module to organize. Defaults to the current directory.")
-	rootCmd.Flags().StringVarP(&module, "module", "m", "", "The name of the go module. Example: github.com/coreydaley-redhat/osgoimports")
+	rootCmd.Flags().StringVarP(&module, "module", "m", "", "The name of the go module. Example: github.com/coreydaley/openshift-goimports")
 	rootCmd.MarkFlagRequired("module")
 }
 
@@ -114,9 +114,9 @@ func initConfig() {
 			os.Exit(1)
 		}
 
-		// Search config in home directory with name ".osgoimports" (without extension).
+		// Search config in home directory with name ".openshift-goimports" (without extension).
 		viper.AddConfigPath(home)
-		viper.SetConfigName(".osgoimports")
+		viper.SetConfigName(".openshift-goimports")
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match

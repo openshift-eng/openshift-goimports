@@ -1,4 +1,4 @@
-module github.com/coreydaley-redhat/osgoimports
+module github.com/coreydaley/openshift-goimports
 
 go 1.13
 
