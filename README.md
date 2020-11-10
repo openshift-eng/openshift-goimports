@@ -22,16 +22,17 @@ Usage:
 
 Flags:
   -h, --help                             help for openshift-goimports
-  -m, --module string                    The name of the go module. Example: github.com/coreydaley/openshift-goimports
-  -p, --path string                      The path to the go module to organize. Defaults to the current directory. (default ".")
+  -m, --module string                    The name of the go module. Example: github.com/example-org/example-repo (optional)
+  -p, --path string                      The path to the go module to organize. Defaults to the current directory. (default ".") (optional)
   -v, --v Level                          number for the log level verbosity
 ```
 
 ## Examples
+`openshift-goimports` will try to automatically determine the module using the `go.mod` file, if present, at the provided path location.
 
 ```
 # Basic usage, command executed against current directory
-$ openshift-goimports --module github.com/example-org/example-repo
+$ openshift-goimports
 
 # Basic usage with command executed in provided directory
 $ openshift-goimports --module github.com/example-org/example-repo --path ~/go/src/example-org/example-repo

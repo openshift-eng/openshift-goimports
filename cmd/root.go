@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"flag"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -27,6 +29,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"golang.org/x/mod/modfile"
 
 	klog "k8s.io/klog/v2"
 
@@ -41,7 +44,7 @@ var (
 	wg      sync.WaitGroup
 	impLine = regexp.MustCompile(`^\s+(?:[\w\.]+\s+)?"(.+)"`)
 	vendor  = regexp.MustCompile(`vendor/`)
-	files   = make(chan string, 10)
+	files   = make(chan string, 1000)
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -50,6 +53,29 @@ var rootCmd = &cobra.Command{
 	Short: "Organize go imports according to OpenShift best practices.",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
+		// If no module is provided, let's try to determine it programatically
+		if len(module) == 0 {
+			modFilePath := fmt.Sprintf("%s/go.mod", path)
+			klog.V(2).Infof("No module path provided, checking for %q", modFilePath)
+			if _, err := os.Stat(modFilePath); os.IsNotExist(err) {
+				klog.Error("no go.mod file found and no module name provided.")
+				os.Exit(1)
+			}
+			f, err := ioutil.ReadFile(fmt.Sprintf("%s/go.mod", path))
+			if err != nil {
+				klog.Errorf("unable to open go.mod file for reading: %v", err)
+				os.Exit(1)
+			}
+			klog.Infof("%#v", string(f))
+			module = modfile.ModulePath(f)
+			if len(module) == 0 {
+				klog.Error("unable to automatically determine module path, please provide one using the --module flag")
+				os.Exit(1)
+			}
+		}
+
+		klog.V(2).Infof("Using module path %q", module)
+
 		for i := 0; i < 10; i++ {
 			wg.Add(1)
 			go imports.Format(files, &wg, &module)
@@ -97,8 +123,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.openshift-goimports.yaml)")
 
 	rootCmd.Flags().StringVarP(&path, "path", "p", ".", "The path to the go module to organize. Defaults to the current directory.")
-	rootCmd.Flags().StringVarP(&module, "module", "m", "", "The name of the go module. Example: github.com/coreydaley/openshift-goimports")
-	rootCmd.MarkFlagRequired("module")
+	rootCmd.Flags().StringVarP(&module, "module", "m", "", "The name of the go module. Example: github.com/example-org/example-repo")
 }
 
 // initConfig reads in config file and ENV variables if set.
