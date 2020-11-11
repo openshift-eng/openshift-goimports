@@ -24,6 +24,7 @@ Flags:
   -h, --help                             help for openshift-goimports
   -m, --module string                    The name of the go module. Example: github.com/example-org/example-repo (optional)
   -p, --path string                      The path to the go module to organize. Defaults to the current directory. (default ".") (optional)
+  -d, --dry                              Dry run only, do not actually make any changes to files
   -v, --v Level                          number for the log level verbosity
 ```
 
