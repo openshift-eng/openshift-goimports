@@ -16,12 +16,15 @@ limitations under the License.
 package imports
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/token"
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/coreydaley/openshift-goimports/pkg/util"
 )
 
 func humanizeImportSpec(importSpecSlice []ast.ImportSpec) []string {
@@ -127,6 +130,43 @@ func TestByPathValue(t *testing.T) {
 		sort.Sort(byPathValue(test.have))
 		if !reflect.DeepEqual(test.have, test.want) {
 			t.Fatalf("test: %s, wanted: %#v, got %#v", test.name, humanizeImportSpec(test.want), humanizeImportSpec(test.have))
+		}
+	}
+}
+
+func TestOrganizeImports(t *testing.T) {
+	importRegexp := util.BuildImportRegexp("github.com/example-org/example-repo")
+
+	tests := []struct {
+		name string
+		have string
+		want string
+	}{
+		{
+			name: "basic test",
+			have: `package util
+
+import (
+	"os"
+	"strings"
+)`,
+			want: `package util
+
+import (
+	"os"
+	"strings"
+)
+`,
+		},
+	}
+
+	for _, test := range tests {
+		out, errs := organizeImports([]byte(test.have), importRegexp)
+		if len(errs) != 0 {
+			t.Errorf("%#v", errs)
+		}
+		if bytes.Compare(out, []byte(test.want)) != 0 {
+			t.Fatalf("test: %s, wanted: %#v, got %#v", test.name, test.want, string(out))
 		}
 	}
 }

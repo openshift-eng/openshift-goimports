@@ -75,10 +75,10 @@ var rootCmd = &cobra.Command{
 		}
 
 		klog.V(2).Infof("Using module path %q", module)
-
+		importRegexp := util.BuildImportRegexp(module)
 		for i := 0; i < 10; i++ {
 			wg.Add(1)
-			go imports.Format(files, &wg, &module, &dry)
+			go imports.Format(files, &wg, importRegexp, &dry)
 		}
 		wg.Add(1)
 		go func() {

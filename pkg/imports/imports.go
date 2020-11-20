@@ -34,12 +34,9 @@ import (
 	"sync"
 
 	klog "k8s.io/klog/v2"
-)
 
-type ImportRegexp struct {
-	Bucket string
-	Regexp *regexp.Regexp
-}
+	v1 "github.com/coreydaley/openshift-goimports/pkg/api/v1"
+)
 
 type byPathValue []ast.ImportSpec
 
@@ -48,10 +45,10 @@ func (a byPathValue) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byPathValue) Less(i, j int) bool { return a[i].Path.Value < a[j].Path.Value }
 
 var (
-	impLine      = regexp.MustCompile(`^\s+(?:[\w\.]+\s+)?"(.+)"`)
-	vendor       = regexp.MustCompile(`vendor/`)
-	importRegexp []ImportRegexp
-	importOrder  = []string{
+	impLine = regexp.MustCompile(`^\s+(?:[\w\.]+\s+)?"(.+)"`)
+	vendor  = regexp.MustCompile(`vendor/`)
+
+	importOrder = []string{
 		"standard",
 		"other",
 		"kubernetes",
@@ -98,91 +95,92 @@ func addSpaces(r io.Reader, breaks []string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// Format takes a channel of file paths and formats the files imports
-func Format(files chan string, wg *sync.WaitGroup, modulePtr *string, dry *bool) {
-	defer wg.Done()
-	importRegexp = []ImportRegexp{
-		{Bucket: "module", Regexp: regexp.MustCompile(*modulePtr)},
-		{Bucket: "kubernetes", Regexp: regexp.MustCompile("k8s.io")},
-		{Bucket: "openshift", Regexp: regexp.MustCompile("github.com/openshift")},
-		{Bucket: "other", Regexp: regexp.MustCompile("[a-zA-Z0-9]+\\.[a-zA-Z0-9]+/")},
+func organizeImports(contents []byte, importRegexp []v1.ImportRegexp) ([]byte, []error) {
+	fs := token.NewFileSet()
+	f, err := parser.ParseFile(fs, "", contents, parser.ParseComments)
+	if err != nil {
+		klog.Errorf("%#v", err)
 	}
+	importGroups := map[string][]ast.ImportSpec{
+		"standard":   []ast.ImportSpec{},
+		"other":      []ast.ImportSpec{},
+		"kubernetes": []ast.ImportSpec{},
+		"openshift":  []ast.ImportSpec{},
+		"module":     []ast.ImportSpec{},
+	}
+	for _, i := range f.Imports {
+		if len(i.Path.Value) == 0 {
+			continue
+		}
+		found := false
+		for _, r := range importRegexp {
+			if r.Regexp.MatchString(i.Path.Value) {
+				importGroups[r.Bucket] = append(importGroups[r.Bucket], *i)
+				found = true
+				break
+			}
+		}
+		if !found {
+			importGroups["standard"] = append(importGroups["standard"], *i)
+		}
+	}
+	var breaks []string
+	for _, decl := range f.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if ok && gen.Tok == token.IMPORT {
+			gen.Specs = []ast.Spec{}
+			for _, group := range importOrder {
+				sort.Sort(byPathValue(importGroups[group]))
+				for n := range importGroups[group] {
+					importGroups[group][n].EndPos = 0
+					importGroups[group][n].Path.ValuePos = 0
+					if importGroups[group][n].Name != nil {
+						importGroups[group][n].Name.NamePos = 0
+					}
+					gen.Specs = append(gen.Specs, &importGroups[group][n])
+					if n == 0 && group != importOrder[0] {
+						newstr, err := strconv.Unquote(importGroups[group][n].Path.Value)
+						if err != nil {
+							klog.Errorf("%#v", err)
+						}
+						breaks = append(breaks, newstr)
+					}
+				}
+			}
+		}
+	}
+
+	printerMode := printer.TabIndent
+	printConfig := &printer.Config{Mode: printerMode, Tabwidth: 4}
+
+	var buf bytes.Buffer
+	if err = printConfig.Fprint(&buf, fs, f); err != nil {
+		klog.Errorf("%#v", err)
+	}
+	out, err := addSpaces(bytes.NewReader(buf.Bytes()), breaks)
+	out, err = format.Source(out)
+	return out, []error{}
+}
+
+// Format takes a channel of file paths and formats the files imports
+func Format(files chan string, wg *sync.WaitGroup, importRegexp []v1.ImportRegexp, dry *bool) {
+	defer wg.Done()
 
 	for path := range files {
 		if len(path) == 0 {
 			continue
 		}
 		klog.V(2).Infof("Processing %s", path)
-		importGroups := map[string][]ast.ImportSpec{
-			"standard":   []ast.ImportSpec{},
-			"other":      []ast.ImportSpec{},
-			"kubernetes": []ast.ImportSpec{},
-			"openshift":  []ast.ImportSpec{},
-			"module":     []ast.ImportSpec{},
-		}
-		var breaks []string
-		fs := token.NewFileSet()
+
 		contents, err := ioutil.ReadFile(path)
 		if err != nil {
 			klog.Errorf("%#v", err)
 		}
-		f, err := parser.ParseFile(fs, "", contents, parser.ParseComments)
-		if err != nil {
-			klog.Fatalf("%#v", err)
+
+		out, errs := organizeImports(contents, importRegexp)
+		if len(errs) != 0 {
+			klog.Errorf("errors encountered organizing imports: %#v", errs)
 		}
-
-		for _, i := range f.Imports {
-			if len(i.Path.Value) == 0 {
-				continue
-			}
-			found := false
-			for _, r := range importRegexp {
-				if r.Regexp.MatchString(i.Path.Value) {
-					importGroups[r.Bucket] = append(importGroups[r.Bucket], *i)
-					found = true
-					break
-				}
-			}
-			if !found {
-				importGroups["standard"] = append(importGroups["standard"], *i)
-			}
-		}
-
-		for _, decl := range f.Decls {
-			gen, ok := decl.(*ast.GenDecl)
-			if ok && gen.Tok == token.IMPORT {
-				gen.Specs = []ast.Spec{}
-				for _, group := range importOrder {
-					sort.Sort(byPathValue(importGroups[group]))
-					for n := range importGroups[group] {
-						importGroups[group][n].EndPos = 0
-						importGroups[group][n].Path.ValuePos = 0
-						if importGroups[group][n].Name != nil {
-							importGroups[group][n].Name.NamePos = 0
-						}
-						gen.Specs = append(gen.Specs, &importGroups[group][n])
-						if n == 0 && group != importOrder[0] {
-							newstr, err := strconv.Unquote(importGroups[group][n].Path.Value)
-							if err != nil {
-								klog.Errorf("%#v", err)
-							}
-							breaks = append(breaks, newstr)
-						}
-					}
-				}
-			}
-		}
-
-		printerMode := printer.TabIndent
-
-		printConfig := &printer.Config{Mode: printerMode, Tabwidth: 4}
-
-		var buf bytes.Buffer
-		if err = printConfig.Fprint(&buf, fs, f); err != nil {
-			klog.Errorf("%#v", err)
-		}
-		out, err := addSpaces(bytes.NewReader(buf.Bytes()), breaks)
-		out, err = format.Source(out)
 		if bytes.Compare(contents, out) != 0 {
 			if *dry {
 				klog.Infof("%s is not sorted", path)
@@ -194,6 +192,5 @@ func Format(files chan string, wg *sync.WaitGroup, modulePtr *string, dry *bool)
 				klog.Infof("%s updated", path)
 			}
 		}
-
 	}
 }
