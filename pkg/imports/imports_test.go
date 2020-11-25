@@ -50,13 +50,13 @@ func TestByPathValue(t *testing.T) {
 		{
 			name: "basic test",
 			have: []ast.ImportSpec{
-				ast.ImportSpec{
+				{
 					Path: &ast.BasicLit{
 						Kind:  token.STRING,
 						Value: "github.com/example/abc",
 					},
 				},
-				ast.ImportSpec{
+				{
 					Path: &ast.BasicLit{
 						Kind:  token.STRING,
 						Value: "github.com/example/cba",
@@ -64,13 +64,13 @@ func TestByPathValue(t *testing.T) {
 				},
 			},
 			want: []ast.ImportSpec{
-				ast.ImportSpec{
+				{
 					Path: &ast.BasicLit{
 						Kind:  token.STRING,
 						Value: "github.com/example/abc",
 					},
 				},
-				ast.ImportSpec{
+				{
 					Path: &ast.BasicLit{
 						Kind:  token.STRING,
 						Value: "github.com/example/cba",
@@ -81,7 +81,7 @@ func TestByPathValue(t *testing.T) {
 		{
 			name: "basic test with named imports",
 			have: []ast.ImportSpec{
-				ast.ImportSpec{
+				{
 					Name: &ast.Ident{
 						Name: "cba",
 					},
@@ -90,7 +90,7 @@ func TestByPathValue(t *testing.T) {
 						Value: "github.com/example/abc",
 					},
 				},
-				ast.ImportSpec{
+				{
 					Name: &ast.Ident{
 						Name: "abc",
 					},
@@ -101,7 +101,7 @@ func TestByPathValue(t *testing.T) {
 				},
 			},
 			want: []ast.ImportSpec{
-				ast.ImportSpec{
+				{
 					Name: &ast.Ident{
 						Name: "cba",
 					},
@@ -110,7 +110,7 @@ func TestByPathValue(t *testing.T) {
 						Value: "github.com/example/abc",
 					},
 				},
-				ast.ImportSpec{
+				{
 					Name: &ast.Ident{
 						Name: "abc",
 					},
