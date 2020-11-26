@@ -4,7 +4,7 @@ verify: verify-gofmt ## Run verifications. Example: make verify
 .PHONY: verify
 
 verify-gofmt: ## Run gofmt verification. Example: make verify-gofmt
-	hack/verify-gofmt.sh
+	scripts/verify-gofmt.sh
 .PHONY: verify-gofmt
 
 test: test-unit ## Run tests. Example: make test
