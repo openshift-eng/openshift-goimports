@@ -33,8 +33,8 @@ import (
 
 	klog "k8s.io/klog/v2"
 
-	"github.com/coreydaley/openshift-goimports/pkg/imports"
-	"github.com/coreydaley/openshift-goimports/pkg/util"
+	"github.com/openshift-eng/openshift-goimports/pkg/imports"
+	"github.com/openshift-eng/openshift-goimports/pkg/util"
 )
 
 var (

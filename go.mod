@@ -1,4 +1,4 @@
-module github.com/coreydaley/openshift-goimports
+module github.com/openshift-eng/openshift-goimports
 
 go 1.13
 
