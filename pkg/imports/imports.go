@@ -99,7 +99,7 @@ func addSpaces(r io.Reader, breaks []string) ([]byte, error) {
 }
 
 // Format takes a channel of file paths and formats the files imports
-func Format(files chan string, wg *sync.WaitGroup, modulePtr *string, dry *bool) {
+func Format(files chan string, wg *sync.WaitGroup, modulePtr *string, dry *bool, list *bool) {
 	defer wg.Done()
 	importRegexp = []ImportRegexp{
 		{Bucket: "module", Regexp: regexp.MustCompile(*modulePtr)},
@@ -186,6 +186,8 @@ func Format(files chan string, wg *sync.WaitGroup, modulePtr *string, dry *bool)
 		if bytes.Compare(contents, out) != 0 {
 			if *dry {
 				klog.Infof("%s is not sorted", path)
+			} else if *list {
+				fmt.Printf("%s is not sorted \n", path)
 			} else {
 				info, err := os.Stat(path)
 				if err = ioutil.WriteFile(path, out, info.Mode()); err != nil {

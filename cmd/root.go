@@ -41,6 +41,7 @@ var (
 	module  string
 	path    string
 	dry     bool
+	list    bool
 	cfgFile string
 	wg      sync.WaitGroup
 	impLine = regexp.MustCompile(`^\s+(?:[\w\.]+\s+)?"(.+)"`)
@@ -85,7 +86,7 @@ var rootCmd = &cobra.Command{
 
 		for i := 0; i < 10; i++ {
 			wg.Add(1)
-			go imports.Format(files, &wg, &module, &dry)
+			go imports.Format(files, &wg, &module, &dry, &list)
 		}
 
 		if s, err := os.Stat(path); err != nil {
@@ -141,6 +142,7 @@ func init() {
 
 	rootCmd.Flags().StringVarP(&path, "path", "p", "", "The path to the go module to organize. Defaults to the current directory.")
 	rootCmd.Flags().StringVarP(&module, "module", "m", "", "The name of the go module. Example: github.com/example-org/example-repo")
+	rootCmd.Flags().BoolVarP(&list, "list", "l", false, "List files whose imports are not sorted without making changes")
 	rootCmd.Flags().BoolVarP(&dry, "dry", "d", false, "Dry run only, do not actually make any changes to files")
 }
 
