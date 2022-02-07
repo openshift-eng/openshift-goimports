@@ -2,15 +2,11 @@
 # openshift-goimports
 Organizes Go imports according to OpenShift best practices
 
-* [Summary](#Summary)
-* [Example sorted import block](#Examplesortedimportblock)
-* [Installation](#Installation)
-* [Usage](#Usage)
-* [Examples](#Examples)
-	* [Example CLI usage](#ExampleCLIusage)
-	* [Example hack/tools.go file](#Examplehacktools.gofile)
-	* [Example hack/verify-imports.sh script](#Examplehackverify-imports.shscript)
-	* [Example Makefile sections](#ExampleMakefilesections)
+* [Summary](#summary)
+* [Example sorted import block](#example-sorted-import-block)
+* [Installation](#installation)
+* [Usage](#usage)
+* [Examples](#examples)
 
 ## <a name='Summary'></a>Summary
 Organizes Go imports into the following groups:
