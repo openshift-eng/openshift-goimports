@@ -57,6 +57,7 @@ Usage:
 
 Flags:
   -h, --help                             help for openshift-goimports
+  -l, --list                             List files whose imports are not sorted without making changes
   -m, --module string                    The name of the go module. Example: github.com/example-org/example-repo (optional)
   -p, --path string                      The path to the go module to organize. Defaults to the current directory. (default ".") (optional)
   -d, --dry                              Dry run only, do not actually make any changes to files
@@ -64,7 +65,9 @@ Flags:
 ```
 
 ## Examples
-`openshift-goimports` will try to automatically determine the module using the `go.mod` file, if present, at the provided path location.
+
+### Example CLI usage
+*`openshift-goimports` will try to automatically determine the module using the `go.mod` file, if present, at the provided path location.*
 
 ```
 # Basic usage, command executed against current directory
@@ -72,4 +75,44 @@ $ openshift-goimports
 
 # Basic usage with command executed in provided directory
 $ openshift-goimports --module github.com/example-org/example-repo --path ~/go/src/example-org/example-repo
+```
+
+### Example hack/tools.go file
+This file will ensure that the `github.com/openshift-eng/openshift-goimports` repo is vendored into your project.
+```
+//go:build tools
+// +build tools
+
+package hack
+
+// Add tools that hack scripts depend on here, to ensure they are vendored.
+import (
+	_ "github.com/openshift-eng/openshift-goimports"
+)
+
+```
+
+### Example hack/verify-imports.sh script
+This file will check if there are any go files that need to be formatted, print a list of them, and exit with status one (1). 
+```
+#!/bin/bash
+
+bad_files=$(go run ./vendor/github.com/openshift-eng/openshift-goimports -m github.com/example/example-repo -l)
+if [[ -n "${bad_files}" ]]; then
+        echo "!!! openshift-goimports needs to be run on the following files:"
+        echo "${bad_files}"
+        echo "Try running 'make imports'"
+        exit 1
+fi
+```
+
+### Example Makefile sections
+```
+imports: ## Organize imports in go files using openshift-goimports. Example: make imports
+	go run ./vendor/github.com/openshift-eng/openshift-goimports/ -m github.com/example/example-repo
+.PHONY: imports
+
+verify-imports: ## Run import verifications. Example: make verify-imports
+	hack/verify-imports.sh
+.PHONY: verify-imports
 ```
