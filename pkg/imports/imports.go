@@ -113,6 +113,13 @@ func Format(files chan string, wg *sync.WaitGroup, modulePtr *string, dry *bool,
 			continue
 		}
 		klog.V(2).Infof("Processing %s", path)
+
+		info, err := os.Stat(path)
+		if err != nil {
+			klog.Errorf("%#v", err)
+		}
+		oldModTime := info.ModTime()
+
 		importGroups := map[string][]ast.ImportSpec{
 			"standard":   {},
 			"other":      {},
@@ -190,6 +197,10 @@ func Format(files chan string, wg *sync.WaitGroup, modulePtr *string, dry *bool,
 				fmt.Printf("%s is not sorted \n", path)
 			} else {
 				info, err := os.Stat(path)
+				if !info.ModTime().Equal(oldModTime) {
+					klog.Warningf("%s got changed while formatting, cowardly refusing to overwrite", path)
+					continue
+				}
 				if err = ioutil.WriteFile(path, out, info.Mode()); err != nil {
 					klog.Errorf("%#v", err)
 				}
