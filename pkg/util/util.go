@@ -21,6 +21,7 @@ import (
 )
 
 // IsGoFile returns whether or not a file is a Go source file
+// this is a test
 func IsGoFile(f os.FileInfo) bool {
 	// ignore non-Go files
 	return !f.IsDir() && !strings.HasPrefix(f.Name(), ".") && strings.HasSuffix(f.Name(), ".go")
