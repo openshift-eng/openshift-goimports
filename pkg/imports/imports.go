@@ -18,11 +18,13 @@ package imports
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/printer"
+	"go/scanner"
 	"go/token"
 	"io"
 	"io/ioutil"
@@ -33,7 +35,7 @@ import (
 	"strings"
 	"sync"
 
-	klog "k8s.io/klog/v2"
+	"k8s.io/klog/v2"
 )
 
 type ImportRegexp struct {
@@ -133,9 +135,18 @@ func Format(files chan string, wg *sync.WaitGroup, modulePtr *string, dry *bool,
 		if err != nil {
 			klog.Errorf("%#v", err)
 		}
-		f, err := parser.ParseFile(fs, "", contents, parser.ParseComments)
+		f, err := parser.ParseFile(fs, path, contents, parser.ParseComments)
 		if err != nil {
-			klog.Fatalf("%#v", err)
+			var scannerErrorList scanner.ErrorList
+			if errors.As(err, &scannerErrorList) {
+				for _, err := range scannerErrorList {
+					klog.Errorf("%v", err)
+				}
+				os.Exit(1)
+			} else {
+				klog.Errorf("%v", err)
+				os.Exit(1)
+			}
 		}
 
 		for _, i := range f.Imports {
