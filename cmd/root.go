@@ -38,15 +38,16 @@ import (
 )
 
 var (
-	module  string
-	path    string
-	dry     bool
-	list    bool
-	cfgFile string
-	wg      sync.WaitGroup
-	impLine = regexp.MustCompile(`^\s+(?:[\w\.]+\s+)?"(.+)"`)
-	vendor  = regexp.MustCompile(`vendor/`)
-	files   = make(chan string, 1000)
+	intermediatesList []string
+	module            string
+	path              string
+	dry               bool
+	list              bool
+	cfgFile           string
+	wg                sync.WaitGroup
+	impLine           = regexp.MustCompile(`^\s+(?:[\w\.]+\s+)?"(.+)"`)
+	vendor            = regexp.MustCompile(`vendor/`)
+	files             = make(chan string, 1000)
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -86,7 +87,7 @@ var rootCmd = &cobra.Command{
 
 		for i := 0; i < 10; i++ {
 			wg.Add(1)
-			go imports.Format(files, &wg, &module, &dry, &list)
+			go imports.Format(files, &wg, intermediatesList, &module, &dry, &list)
 		}
 
 		if s, err := os.Stat(path); err != nil {
@@ -141,6 +142,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.openshift-goimports.yaml)")
 
 	rootCmd.Flags().StringVarP(&path, "path", "p", "", "The path to the go module to organize. Defaults to the current directory.")
+	rootCmd.Flags().StringArrayVarP(&intermediatesList, "intermediate", "i", []string{}, "Names of go modules to put between openshift and module to organize. Example usage: -i github.com/thirdy/one -i thirdy.io/two")
 	rootCmd.Flags().StringVarP(&module, "module", "m", "", "The name of the go module. Example: github.com/example-org/example-repo")
 	rootCmd.Flags().BoolVarP(&list, "list", "l", false, "List files whose imports are not sorted without making changes")
 	rootCmd.Flags().BoolVarP(&dry, "dry", "d", false, "Dry run only, do not actually make any changes to files")
