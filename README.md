@@ -65,7 +65,7 @@ Usage:
 
 Flags:
   -h, --help                             help for openshift-goimports
-  -i, --intermediates string             Space-separated list of names of go modules to put between openshift and module to organize. Example: github.com/thirdy/one thirdy.io/two (optional)
+  -i, --intermediate stringArray         Names of go modules to put between openshift and module to organize. Example usage: -i github.com/thirdy/one -i thirdy.io/two
   -l, --list                             List files whose imports are not sorted without making changes
   -m, --module string                    The name of the go module. Example: github.com/example-org/example-repo (optional)
   -p, --path string                      The path to the go module to organize. Defaults to the current directory. (default ".") (optional)
