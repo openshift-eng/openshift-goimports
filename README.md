@@ -14,6 +14,7 @@ Organizes Go imports into the following groups:
  - **other** - Anything not specifically called out in this list
  - **kubernetes** - Anything that starts with `k8s.io`
  - **openshift** - Anything that starts with `github.com/openshift`
+ - **intermediates** - Optional list of groups
  - **module** - Anything that is part of the current module
 
 ## <a name='Examplesortedimportblock'></a>Example sorted import block
@@ -64,12 +65,25 @@ Usage:
 
 Flags:
   -h, --help                             help for openshift-goimports
+  -i, --intermediate stringArray         Names of go modules to put between openshift and module to organize. Example usage: -i github.com/thirdy/one -i thirdy.io/two
   -l, --list                             List files whose imports are not sorted without making changes
   -m, --module string                    The name of the go module. Example: github.com/example-org/example-repo (optional)
   -p, --path string                      The path to the go module to organize. Defaults to the current directory. (default ".") (optional)
   -d, --dry                              Dry run only, do not actually make any changes to files
   -v, --v Level                          number for the log level verbosity
 ```
+
+## Matching and Precedence
+
+Each group is identified by a pattern that is sought as a substring in the import path.  For example, the kubernetes group is defined by searching for the substring "k8s.io".  Multiple groups can match one import.  In such a case, the import is put into the first matching group in the following list.
+
+- the module to organize
+- the intermediate modules, in the order given on the command line
+- kubernetes
+- openshift
+- other
+
+An import whose path matches no other group's pattern is put in the standard group.
 
 ## <a name='Examples'></a>Examples
 

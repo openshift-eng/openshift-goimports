@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -50,15 +50,13 @@ func (a byPathValue) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byPathValue) Less(i, j int) bool { return a[i].Path.Value < a[j].Path.Value }
 
 var (
-	impLine      = regexp.MustCompile(`^\s+(?:[\w\.]+\s+)?"(.+)"`)
-	vendor       = regexp.MustCompile(`vendor/`)
-	importRegexp []ImportRegexp
-	importOrder  = []string{
+	impLine           = regexp.MustCompile(`^\s+(?:[\w\.]+\s+)?"(.+)"`)
+	vendor            = regexp.MustCompile(`vendor/`)
+	importOrderPrefix = []string{
 		"standard",
 		"other",
 		"kubernetes",
 		"openshift",
-		"module",
 	}
 )
 
@@ -101,14 +99,24 @@ func addSpaces(r io.Reader, breaks []string) ([]byte, error) {
 }
 
 // Format takes a channel of file paths and formats the files imports
-func Format(files chan string, wg *sync.WaitGroup, modulePtr *string, dry *bool, list *bool) {
+func Format(files chan string, wg *sync.WaitGroup, intermediatePatternList []string, modulePtr *string, dry *bool, list *bool) {
 	defer wg.Done()
-	importRegexp = []ImportRegexp{
+	importRegexp := []ImportRegexp{
 		{Bucket: "module", Regexp: regexp.MustCompile(*modulePtr)},
+	}
+	importOrder := importOrderPrefix
+	for idx, intermediatePattern := range intermediatePatternList {
+		imRe := regexp.MustCompile(intermediatePattern)
+		bucketName := fmt.Sprintf("intermediate%d", idx)
+		importRegexp = append(importRegexp, ImportRegexp{Bucket: bucketName, Regexp: imRe})
+		importOrder = append(importOrder, bucketName)
+	}
+	importRegexp = append(importRegexp, []ImportRegexp{
 		{Bucket: "kubernetes", Regexp: regexp.MustCompile("k8s.io")},
 		{Bucket: "openshift", Regexp: regexp.MustCompile("github.com/openshift")},
 		{Bucket: "other", Regexp: regexp.MustCompile("[a-zA-Z0-9]+\\.[a-zA-Z0-9]+/")},
-	}
+	}...)
+	importOrder = append(importOrder, "module")
 
 	for path := range files {
 		if len(path) == 0 {
@@ -158,6 +166,7 @@ func Format(files chan string, wg *sync.WaitGroup, modulePtr *string, dry *bool,
 				if r.Regexp.MatchString(i.Path.Value) {
 					importGroups[r.Bucket] = append(importGroups[r.Bucket], *i)
 					found = true
+					klog.V(3).InfoS("Import classified", "file", path, "import", i.Path.Value, "bucket", r.Bucket)
 					break
 				}
 			}
