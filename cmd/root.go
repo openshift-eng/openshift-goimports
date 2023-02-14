@@ -191,7 +191,11 @@ func findGoModule(path string) (string, error) {
 		if _, err := os.Stat(modFilePath); !os.IsNotExist(err) {
 			break
 		}
+		prevPath := path
 		path = filepath.Dir(path)
+		if path == prevPath {
+			return "", nil
+		}
 	}
 	if path == "." {
 		return "", nil
